@@ -1,30 +1,19 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-echo "@configfars - telegram"
+echo "@configfars - Telegram Chat (Type 'exit' to quit)"
 
-# گرفتن مدل و پیام کاربر
 read -r -p "Please enter ID_MODEL: " ID_MODEL
-read -r -p "Enter your message: " PROMPT
 
 WORKER_URL="https://configfars-model.sitema.workers.dev"
 
-# اگر پیام فارسی است، فارسی‌سازی و RTL برای ارسال به مدل
-PROMPT_FARSI=$(python3 - <<END
-import arabic_reshaper
-text = """$PROMPT"""
-if text:
-    print(arabic_reshaper.reshape(text)[::-1])
-END
-)
-
-# دریافت توکن
+# دریافت توکن یکبار
 TOKEN=$(curl -s "$WORKER_URL/get-token" | grep -oP '(?<="token":")[^"]+')
 if [ -z "$TOKEN" ]; then
     echo "Error getting token!"
     exit 1
 fi
 
-# دریافت small_wave_url
+# دریافت small_wave_url یکبار
 RESPONSE=$(curl -s -X POST "$WORKER_URL/query" \
     -H "Content-Type: application/json" \
     -d "{\"id_model\":\"$ID_MODEL\",\"token\":\"$TOKEN\"}")
@@ -35,14 +24,36 @@ if [ -z "$SMALL_WAVE_URL" ]; then
     exit 1
 fi
 
-# URL-encode کردن پیام فارسی قبل از ارسال
-ENCODED_PROMPT=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT_FARSI'))")
+# حافظه موقت برای پیام‌ها
+CONTEXT=""
 
-# GET روی small_wave_url با پیام
-ANSWER=$(curl -s "${SMALL_WAVE_URL}${ENCODED_PROMPT}")
+while true; do
+    read -r -p "You: " USER_MSG
+    if [ "$USER_MSG" = "exit" ]; then
+        echo "Exiting chat."
+        break
+    fi
 
-# فارسی‌سازی جواب مدل
-ANSWER_FARSI=$(python3 - <<END
+    # افزودن پیام کاربر به Context
+    CONTEXT="$CONTEXT\n$USER_MSG"
+
+    # فارسی‌سازی پیام کاربر قبل از ارسال به مدل
+    MSG_FARSI=$(python3 - <<END
+import arabic_reshaper
+text = """$USER_MSG"""
+if text:
+    print(arabic_reshaper.reshape(text)[::-1])
+END
+)
+
+    # URL encode پیام
+    ENCODED_MSG=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MSG_FARSI'))")
+
+    # GET روی small_wave_url با پیام
+    ANSWER=$(curl -s "${SMALL_WAVE_URL}${ENCODED_MSG}")
+
+    # فارسی‌سازی جواب مدل
+    ANSWER_FARSI=$(python3 - <<END
 import arabic_reshaper
 text = """$ANSWER"""
 if text:
@@ -50,5 +61,8 @@ if text:
 END
 )
 
-echo "Answer:"
-echo "$ANSWER_FARSI"
+    echo "Bot: $ANSWER_FARSI"
+
+    # افزودن جواب مدل به Context
+    CONTEXT="$CONTEXT\n$ANSWER_FARSI"
+done
