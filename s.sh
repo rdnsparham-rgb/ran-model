@@ -2,17 +2,9 @@
 
 echo "@configfars - telegram"
 
-fix_farsi() {
-    python3 - << 'EOF'
-import sys
-import arabic_reshaper
-from bidi.algorithm import get_display
-
-text = sys.stdin.read()
-reshaped = arabic_reshaper.reshape(text)
-bidi_text = get_display(reshaped)
-print(bidi_text)
-EOF
+# تابع ساده برای برعکس کردن فارسی
+reverse_farsi_light() {
+    python3 -c "import sys; text=sys.stdin.read(); print(''.join(text[::-1]))"
 }
 
 read -p "Please enter ID_MODEL: " ID_MODEL
@@ -39,5 +31,6 @@ fi
 FULL_URL="${SMALL_WAVE_URL}$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT'))")"
 ANSWER=$(curl -s "$FULL_URL")
 
+# چاپ جواب به صورت برعکس
 echo "Answer:"
-echo "$ANSWER" | fix_farsi
+echo "$ANSWER" | reverse_farsi_light
