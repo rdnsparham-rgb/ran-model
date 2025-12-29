@@ -37,17 +37,8 @@ while true; do
     # افزودن پیام کاربر به Context
     CONTEXT="$CONTEXT\n$USER_MSG"
 
-    # فارسی‌سازی پیام کاربر قبل از ارسال به مدل
-    MSG_FARSI=$(python3 - <<END
-import arabic_reshaper
-text = """$USER_MSG"""
-if text:
-    print(arabic_reshaper.reshape(text)[::-1])
-END
-)
-
-    # URL encode پیام
-    ENCODED_MSG=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MSG_FARSI'))")
+    # فقط URL encode پیام برای ارسال به مدل (بدون RTL و reshape)
+    ENCODED_MSG=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$USER_MSG'''))")
 
     # GET روی small_wave_url با پیام
     ANSWER=$(curl -s "${SMALL_WAVE_URL}${ENCODED_MSG}")
