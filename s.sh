@@ -2,22 +2,29 @@
 
 echo "@configfars - telegram"
 
-# Get ID_MODEL from the user
-read -p "Please enter ID_MODEL: " ID_MODEL
-
-# Get user's message
-read -p "Enter your message: " PROMPT
+# گرفتن مدل و پیام کاربر
+read -r -p "Please enter ID_MODEL: " ID_MODEL
+read -r -p "Enter your message: " PROMPT
 
 WORKER_URL="https://configfars-model.sitema.workers.dev"
 
-# Get token
+# اگر پیام فارسی است، فارسی‌سازی و RTL برای ارسال به مدل
+PROMPT_FARSI=$(python3 - <<END
+import arabic_reshaper
+text = """$PROMPT"""
+if text:
+    print(arabic_reshaper.reshape(text)[::-1])
+END
+)
+
+# دریافت توکن
 TOKEN=$(curl -s "$WORKER_URL/get-token" | grep -oP '(?<="token":")[^"]+')
 if [ -z "$TOKEN" ]; then
     echo "Error getting token!"
     exit 1
 fi
 
-# Send request to worker
+# دریافت small_wave_url
 RESPONSE=$(curl -s -X POST "$WORKER_URL/query" \
     -H "Content-Type: application/json" \
     -d "{\"id_model\":\"$ID_MODEL\",\"token\":\"$TOKEN\"}")
@@ -28,13 +35,15 @@ if [ -z "$SMALL_WAVE_URL" ]; then
     exit 1
 fi
 
-# Send message and get answer
-FULL_URL="${SMALL_WAVE_URL}$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT'))")"
-ANSWER=$(curl -s "$FULL_URL")
+# URL-encode کردن پیام فارسی قبل از ارسال
+ENCODED_PROMPT=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT_FARSI'))")
 
-# Persian shaping with arabic_reshaper
+# GET روی small_wave_url با پیام
+ANSWER=$(curl -s "${SMALL_WAVE_URL}${ENCODED_PROMPT}")
+
+# فارسی‌سازی جواب مدل
 ANSWER_FARSI=$(python3 - <<END
-import sys, arabic_reshaper
+import arabic_reshaper
 text = """$ANSWER"""
 if text:
     print(arabic_reshaper.reshape(text)[::-1])
