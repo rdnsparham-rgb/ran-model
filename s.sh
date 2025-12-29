@@ -2,53 +2,44 @@
 
 echo "@configfars - telegram"
 
-# گرفتن مدل و پیام
-read -r -p "Please enter ID_MODEL: " ID_MODEL
-read -r -p "Enter your message: " PROMPT
+# Get ID_MODEL from the user
+read -p "Please enter ID_MODEL: " ID_MODEL
+
+# Get user's message
+read -p "Enter your message: " PROMPT
 
 WORKER_URL="https://configfars-model.sitema.workers.dev"
 
-# اجرای کل جریان با Python تا requests و encoding درست باشند
-ANSWER=$(python3 - <<END
-import requests
-import urllib.parse
-import arabic_reshaper
+# Get token
+TOKEN=$(curl -s "$WORKER_URL/get-token" | grep -oP '(?<="token":")[^"]+')
+if [ -z "$TOKEN" ]; then
+    echo "Error getting token!"
+    exit 1
+fi
 
-WORKER_URL = "$WORKER_URL"
-ID_MODEL = "$ID_MODEL"
-PROMPT = "$PROMPT"
+# Send request to worker
+RESPONSE=$(curl -s -X POST "$WORKER_URL/query" \
+    -H "Content-Type: application/json" \
+    -d "{\"id_model\":\"$ID_MODEL\",\"token\":\"$TOKEN\"}")
 
-try:
-    # 1. گرفتن token
-    token_response = requests.get(f"{WORKER_URL}/get-token")
-    token_response.raise_for_status()
-    token = token_response.json()['token']
+SMALL_WAVE_URL=$(echo "$RESPONSE" | grep -oP '(?<="small_wave_url":")[^"]+')
+if [ -z "$SMALL_WAVE_URL" ]; then
+    echo "Error getting small_wave_url!"
+    exit 1
+fi
 
-    # 2. گرفتن small_wave_url
-    data = {"id_model": ID_MODEL, "token": token}
-    worker_response = requests.post(f"{WORKER_URL}/query", json=data)
-    worker_response.raise_for_status()
-    small_wave_url = worker_response.json().get("small_wave_url")
-    if not small_wave_url:
-        print("Error: small_wave_url not found")
-        exit()
+# Send message and get answer
+FULL_URL="${SMALL_WAVE_URL}$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT'))")"
+ANSWER=$(curl -s "$FULL_URL")
 
-    # 3. ساخت full URL با پیام URL-encoded
-    full_url = f"{small_wave_url}{urllib.parse.quote(PROMPT)}"
-
-    # 4. GET روی full_url
-    response = requests.get(full_url)
-    response.raise_for_status()
-    text = response.text
-
-    # 5. فارسی‌سازی با arabic_reshaper و RTL
-    if text:
-        reshaped = arabic_reshaper.reshape(text)
-        print(reshaped[::-1])
-except Exception as e:
-    print("Error:", e)
+# Persian shaping with arabic_reshaper
+ANSWER_FARSI=$(python3 - <<END
+import sys, arabic_reshaper
+text = """$ANSWER"""
+if text:
+    print(arabic_reshaper.reshape(text)[::-1])
 END
 )
 
 echo "Answer:"
-echo "$ANSWER"
+echo "$ANSWER_FARSI"
